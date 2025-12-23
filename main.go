@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"log"
 	"log/slog"
 	"os"
 	"strconv"
@@ -21,12 +22,20 @@ func loadBankData(path string) ([]Bank, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer func() {
+		if err = file.Close(); err != nil {
+			slog.Error(err.Error())
+		}
+	}()
 	var banks []Bank
 
 	scanner := bufio.NewScanner(file)
 
 	for scanner.Scan() {
 		data := strings.Split(scanner.Text(), ",")
+		if len(data) != 3 {
+			return nil, errors.New("credit card format error, expected 3 comma-separated fields per line)")
+		}
 		name := data[0]
 		from, err := strconv.Atoi(data[1])
 		if err != nil {
@@ -43,6 +52,10 @@ func loadBankData(path string) ([]Bank, error) {
 			BinFrom: from,
 			BinTo:   to,
 		})
+	}
+
+	if err = scanner.Err(); err != nil {
+		return nil, err
 	}
 
 	return banks, nil
@@ -92,12 +105,11 @@ func validateLuhn(cardNumber string) bool {
 }
 
 func strNumToIntSliceNum(num string) ([]int, error) {
-	num = strings.TrimSpace(num)
 	digits := make([]int, len(num))
 
 	for i, v := range num {
 		if v > '9' || v < '0' {
-			return nil, errors.New(fmt.Sprintf("card number contains non-numeric character: %#v", v))
+			return nil, fmt.Errorf("card number contains non-numeric character: %#v", v)
 		}
 		digits[i] = int(v - '0')
 	}
@@ -109,18 +121,17 @@ func strNumToIntSliceNum(num string) ([]int, error) {
 func getUserInput() (string, error) {
 	reader := bufio.NewReader(os.Stdin)
 	text, err := reader.ReadString('\n')
-	if text == "\n" {
-		return text, nil
-	}
 	if err != nil {
 		return "", err
 	}
+	if text == "\n" {
+		return text, nil
+	}
 
-	return text, nil
+	return strings.TrimSpace(text), nil
 }
 
 func validateInput(card string) bool {
-	card = strings.TrimSpace(card)
 	cardlen := len(card)
 
 	if cardlen < 13 || cardlen > 19 {
@@ -141,18 +152,18 @@ func main() {
 	fmt.Println("Добро пожаловать в программу валидации карт!")
 	banks, err := loadBankData("banks.txt")
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 
 	for {
-		fmt.Print("Please enter a credit card number (or press Enter to quit): ")
+		fmt.Print("Введите номер кредитной карты (или нажмите Enter для выхода): ")
 		cardNumber, err := getUserInput()
 		if err != nil {
-			panic(err)
+			log.Fatal(err)
 		}
 
 		if cardNumber == "\n" {
-			fmt.Println("Программа завершена\n")
+			fmt.Println("Программа завершена")
 			break
 		}
 		fmt.Println("You entered:", cardNumber)
@@ -169,14 +180,15 @@ func main() {
 
 		bin, err := extractBIN(cardNumber)
 		if err != nil {
-			panic(err)
+			log.Fatal(err)
 		}
 		fmt.Println("Номер карты валиден")
 
 		res, err := identifyBank(bin, banks)
 		if err != nil {
 			fmt.Println("Банк не определен")
+			continue
 		}
-		fmt.Printf("Банк: %s", res)
+		fmt.Printf("Банк: %s\n", res)
 	}
 }
