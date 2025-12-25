@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
-	"log"
 	"log/slog"
 	"os"
 	"strconv"
@@ -22,11 +21,7 @@ func loadBankData(path string) ([]Bank, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer func() {
-		if err = file.Close(); err != nil {
-			slog.Error(err.Error())
-		}
-	}()
+	defer file.Close()
 	var banks []Bank
 
 	scanner := bufio.NewScanner(file)
@@ -34,7 +29,7 @@ func loadBankData(path string) ([]Bank, error) {
 	for scanner.Scan() {
 		data := strings.Split(scanner.Text(), ",")
 		if len(data) != 3 {
-			return nil, errors.New("credit card format error, expected 3 comma-separated fields per line)")
+			return nil, errors.New("credit card format error, expected 3 comma-separated fields per line")
 		}
 		name := data[0]
 		from, err := strconv.Atoi(data[1])
@@ -62,6 +57,9 @@ func loadBankData(path string) ([]Bank, error) {
 }
 
 func extractBIN(cardNumber string) (int, error) {
+	if len(cardNumber) < 6 {
+		return 0, errors.New("card number must be at least 6 digits long")
+	}
 	bin, err := strconv.Atoi(cardNumber[:6])
 	if err != nil {
 		return 0, err
@@ -124,9 +122,6 @@ func getUserInput() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if text == "\n" {
-		return text, nil
-	}
 
 	return strings.TrimSpace(text), nil
 }
@@ -152,21 +147,23 @@ func main() {
 	fmt.Println("Добро пожаловать в программу валидации карт!")
 	banks, err := loadBankData("banks.txt")
 	if err != nil {
-		log.Fatal(err)
+		slog.Error(err.Error())
+		os.Exit(1)
 	}
 
 	for {
 		fmt.Print("Введите номер кредитной карты (или нажмите Enter для выхода): ")
 		cardNumber, err := getUserInput()
 		if err != nil {
-			log.Fatal(err)
+			slog.Error(err.Error())
+			os.Exit(1)
 		}
 
-		if cardNumber == "\n" {
+		if cardNumber == "" {
 			fmt.Println("Программа завершена")
 			break
 		}
-		fmt.Println("You entered:", cardNumber)
+		fmt.Println("Вы ввели:", cardNumber)
 
 		if !validateInput(cardNumber) {
 			fmt.Println("Ошибка формата")
@@ -180,7 +177,8 @@ func main() {
 
 		bin, err := extractBIN(cardNumber)
 		if err != nil {
-			log.Fatal(err)
+			slog.Error(err.Error())
+			os.Exit(1)
 		}
 		fmt.Println("Номер карты валиден")
 
